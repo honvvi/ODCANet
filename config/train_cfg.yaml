@@ -1,0 +1,34 @@
+# ODCANet Configuration
+System_Parameters:
+  device: 'cuda'
+
+Model:
+  Shared_Encoder:
+    backbone: 'Convnextv2_base'
+    pretrain: True
+  HCSAM_Decoder:
+    embed_dim: 128
+    de_up_style: 'dysample'
+    seg_head_up_style: 'dysample'
+    use_drop_out: False
+
+  models_need_build: ['Shared_Encoder', 'OFDM', 'HCSAM_Decoder']
+  models_need_train: ['Shared_Encoder', 'OFDM', 'HCSAM_Decoder']
+
+Train:
+  use_amp: False
+  num_workers: 4
+  train_batch_size: 2
+  epoch: 300
+  val_batch_size: 1
+  Val_while_train: True
+  val_step: 1
+
+  optimizer: 'AdamW'
+  learning_rate: 0.000035
+  warm_epoch: 15
+  lr_power: 0.9
+  lr_threshold: 0.0001
+  lr_strategy: 'poly'
+
+  orth_weight:
