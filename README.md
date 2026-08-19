@@ -1,129 +1,161 @@
 # ODCANet
 
-Code for **Orthogonal Feature Decoupling and Hierarchical Cross-Scale
-Aggregation Network for RGB-T Semantic Segmentation**.
+Official PyTorch implementation of **ODCANet**: *Orthogonal Feature Decoupling and Hierarchical Cross-Scale Aggregation Network for RGB-T Semantic Segmentation*.
 
-## Requirements
+ODCANet uses a weight-sharing ConvNeXtV2 encoder to extract aligned RGB and thermal features, then applies an Orthogonal Feature Decoupling Module (OFDM) with a Correlation-guided Decomposition Block (CDB) to encourage separation of modality-shared and modality-specific representations. A Hierarchical Cross-Scale Aggregation Module (HCSAM) further aggregates multi-scale fused features for dense prediction.
 
-- Python 3.10
-- PyTorch 2.10.0
-- torchvision 0.25.0
-- CUDA 12.x
+<p align="center">
+  <img src="docs/network.png" width="95%"/>
+</p>
+<p align="center"><em>Overview of ODCANet. (a) Overall pipeline. (b) OFDM. (c) CDB. (d) HCSAM. (e) PUB.</em></p>
 
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-## Repository Layout
+## Project Structure
 
 ```text
 ODCANet/
-├── Checkpoint/
-│   ├── .gitignore               # Prevent checkpoint binaries from being committed
-│   └── README.md                # Place dataset-specific component weights here
+├── train.py                     # Training entry
+├── test.py                      # Evaluation entry
+├── requirements.txt             # Dependencies
 ├── config/
-│   └── train_cfg.yaml
+│   └── train_cfg.yaml           # Training / model config
 ├── data/
-│   ├── __init__.py
-│   └── rgbt_dataset.py          # Dataset metadata, image loading, DataLoader
-├── evaluation/
-│   ├── __init__.py
-│   ├── metrics.py               # mIoU, mAccuracy, pixel accuracy, per-class IoU
-│   ├── roc.py                   # ROC/AUC collection and output
+│   ├── mfnet_dataset.py         # MFNet loader
+│   └── rgbt_dataset.py          # PST / FMB loaders
 ├── model/
-│   ├── __init__.py
-│   ├── build_model.py
-│   ├── shared_encoder.py         # Shared ConvNeXtV2 encoder
-│   ├── ofdm.py                   # OFDM and OPB
-│   └── hcsam.py                  # HCSAM and PUB
+│   ├── build_model.py           # Build full ODCANet
+│   ├── shared_encoder.py        # Shared ConvNeXtV2 encoder
+│   ├── ofdm.py                  # OFDM
+│   └── hcsam.py                 # HCSAM decoder
+├── evaluation/
+│   ├── metrics.py               # mIoU / mAcc
+│   └── roc.py                   # ROC / AUC
 ├── utils/
-│   ├── __init__.py
-│   ├── checkpoint.py             # Checkpoint compatibility and loading
-│   ├── inference.py              # Model forward helper
-│   └── visualization.py          # Prediction visualization
-├── test.py                       # Evaluation entry point
-├── requirements.txt
-└── README.md
+│   ├── checkpoint.py            # Save / load weights
+│   ├── inference.py             # Inference helpers
+│   ├── visualization.py         # Visualization helpers
+│   └── analyze_decoupling.py    # Feature-decoupling analysis
+├── Checkpoint/                  # Pretrained weights
+│   ├── MFNet/
+│   ├── PST/
+│   └── FMB/
+└── docs/
+    └── network.png              # Architecture figure
 ```
 
-`test.py` contains the evaluation workflow, including model construction,
-validation, result printing, and optional ROC output. Dataset loading,
-checkpoint conversion, model inference, and metric implementations are kept
-in their own modules.
+## Environment
 
-## Dataset Layout
+The code has been tested with **Python 3.10**, **PyTorch 2.10.0**, **torchvision 0.25.0**, and **CUDA 12.x**. Create a Python environment and install PyTorch / torchvision according to your CUDA version:
 
-The `--dataset` value and its directory name must be one of `FMB`, `PST`, or
-`MH`. Use the following layout below `--data_root`:
+```bash
+conda create -n odcanet python=3.10 -y
+conda activate odcanet
+
+# Install PyTorch / torchvision following your CUDA version:
+# https://pytorch.org/get-started/locally/
+
+git clone https://github.com/honvvi/ODCANet.git
+cd ODCANet
+pip install -r requirements.txt
+```
+
+The code uses CUDA by default. Set `--device` in the training / evaluation commands below.
+
+## Pretrained Weights
+
+Dataset-specific trained weights will be released on the [GitHub Releases](https://github.com/honvvi/ODCANet/releases) page. For each dataset, download and place **three** component files under `Checkpoint/<dataset>/`:
 
 ```text
-Datasets/
-├── FMB/
-│   └── test/
-│       ├── Visible/
-│       ├── Infrared/
-│       └── Label/
+Checkpoint/
+├── MFNet/
+│   ├── shared_encoder.pth
+│   ├── ofdm.pth
+│   └── hcsam_decoder.pth
 ├── PST/
+└── FMB/    
+```
+
+Use `MFNet`, `PST`, or `FMB` as the folder name to match `--dataset`. During training, ConvNeXtV2-Base (ImageNet-22K) is loaded automatically when `Model.Shared_Encoder.pretrain: True` in `config/train_cfg.yaml`.
+
+## Datasets
+
+Set `--data_root` to the parent directory of the datasets below. `--dataset` is one of `MFNet`, `PST`, `FMB`. Download: [MFNet](https://www.mi.t.u-tokyo.ac.jp/static/projects/mil_multispectral/), [PST900](https://drive.google.com/file/d/1hZeM-MvdUC_Btyok7mdF00RV-InbAadm/view?pli=1), [FMB](https://pan.baidu.com/s/1k7PgCsSJVZJIoIhgMjWxNg?pwd=IVIF).
+
+```text
+<data_root>/
+├── MFNet/
+│   ├── images/              # 4-channel PNG (RGB + thermal)
+│   ├── labels/              # Class-index masks
+│   ├── train.txt
+│   └── test.txt
+├── PST/                     # PST900
+│   ├── train/
+│   │   ├── rgb/
+│   │   ├── thermal/
+│   │   └── labels/
 │   └── test/
 │       ├── rgb/
 │       ├── thermal/
 │       └── labels/
-└── MH/
+└── FMB/
+    ├── train/
+    │   ├── Visible/
+    │   ├── Infrared/
+    │   └── Label/
     └── test/
-        ├── <id>_rgb.png
-        ├── <id>_th.png
-        └── <id>.png
+        ├── Visible/
+        ├── Infrared/
+        └── Label/
 ```
 
-For FMB and PST, each RGB image, thermal image, and label must share the same
-filename. MH uses the `<id>_rgb.png`, `<id>_th.png`, and `<id>.png` naming
-convention used by the original experiment code.
+## Training
 
-## Checkpoints
-
-Supply one checkpoint for each component:
-
-- `Shared_Encoder`
-- `OFDM`
-- `HCSAM_Decoder`
-
-Store them under `Checkpoint/<dataset>/`, for example:
-
-```text
-Checkpoint/FMB/
-├── shared_encoder.pth
-├── ofdm.pth
-└── hcsam_decoder.pth
+```bash
+python train.py \
+  --config ./config/train_cfg.yaml \
+  --dataset MFNet \
+  --data_root /path/to/datasets \
+  --device cuda:0
 ```
 
-The loader validates tensor names and shapes. It also converts checkpoints
-saved by the former training code using `Teacher_Encoder`, `Teacher_Fusion`,
-and `Teacher_Decoder` names.
+- Replace `MFNet` with `PST` or `FMB`.
+- For PST900, use `--batch_size 1` if GPU memory is limited.
+- Default schedule: 300 epochs, AdamW, ImageNet normalization, random flip + multi-scale resize (`{0.5, 0.75, 1.0, 1.25, 1.5, 1.75}`) + crop/pad.
+- The final-epoch component weights are saved to `Checkpoint/<dataset>/`.
 
 ## Evaluation
 
-Each invocation performs one complete CUDA evaluation on `cuda:2`: mIoU,
-mAccuracy, pixel accuracy, per-class IoU, Params, FLOPs, peak memory,
-latency, FPS, pure inference time, test runtime, and ROC/AUC.
-
 ```bash
-python3 test.py \
+python test.py \
   --config ./config/train_cfg.yaml \
-  --dataset FMB \
-  --data_root /path/to/Datasets \
-  --shared_encoder_path ./Checkpoint/FMB/shared_encoder.pth \
-  --ofdm_path ./Checkpoint/FMB/ofdm.pth \
-  --hcsam_decoder_path ./Checkpoint/FMB/hcsam_decoder.pth
+  --dataset MFNet \
+  --data_root /path/to/datasets \
+  --shared_encoder_path ./Checkpoint/MFNet/shared_encoder.pth \
+  --ofdm_path ./Checkpoint/MFNet/ofdm.pth \
+  --hcsam_decoder_path ./Checkpoint/MFNet/hcsam_decoder.pth \
+  --device cuda:0
 ```
 
-The former option names `--encoder_path`, `--fusion_path`, and
-`--decoder_path` are retained for compatibility.
+For each selected dataset, the script will:
 
-Results are written automatically to `results/FMB/`:
+1. Load the three component weights under `Checkpoint/<dataset>/`.
+2. Run inference on the official test split.
+3. Report pixel accuracy, mean accuracy, mIoU, per-class IoU / accuracy, ROC/AUC, and efficiency metrics.
+4. Save numerical summaries under `results/<dataset>/`.
 
-- `roc_curve.png`
-- `roc_curves.npz`
-- `summary.json`
-- `efficiency_records.json`
+## Feature Decoupling Analysis
+
+```bash
+python utils/analyze_decoupling.py \
+  --dataset MFNet \
+  --data_root /path/to/datasets \
+  --config ./config/train_cfg.yaml \
+  --device cuda:0 \
+  --run "lambda=0:/path/shared_encoder.pth:/path/ofdm_lambda0.pth:/path/decoder.pth" \
+  --run "lambda=0.01:/path/shared_encoder.pth:/path/ofdm_lambda001.pth:/path/decoder.pth" \
+  --reference lambda=0 \
+  --compute-cka
+```
+
+## Citation
+
+If you find this repository useful, please cite the corresponding paper.

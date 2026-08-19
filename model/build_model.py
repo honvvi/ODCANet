@@ -10,7 +10,7 @@ from .hcsam import HCSAMDecoder
 DATASET_CONFIGS = {
     'FMB': {'num_classes': 15},
     'PST': {'num_classes': 5},
-    'MH': {'num_classes': 9},
+    'MFNet': {'num_classes': 9},
 }
 
 

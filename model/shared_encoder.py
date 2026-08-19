@@ -1,7 +1,15 @@
+import os
+import urllib.request
+
 import torch
+
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.models.layers import trunc_normal_, DropPath
+
+CONVNEXTV2_BASE_URL = (
+    "https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_base_22k_384_ema.pt"
+)
 
 
 class LayerNorm(nn.Module):
@@ -107,14 +115,22 @@ class ConvNeXtV2(nn.Module):
             nn.init.constant_(m.bias, 0)
 
     def load_pre_train_weights(self, pre_train_path):
-        try:
-            pretrain_weights = torch.load(pre_train_path, map_location='cpu')
-            if 'model' in pretrain_weights:
-                pretrain_weights = pretrain_weights['model']
-            miss_keys, unexpected_keys = self.load_state_dict(pretrain_weights, strict=False)
-            print(f'ConvNeXtV2 weights loaded, miss: {miss_keys}, unexpected: {unexpected_keys}')
-        except Exception as e:
-            print(f'Failed to load pretrained weights: {e}')
+        if not os.path.isfile(pre_train_path):
+            if os.path.basename(pre_train_path) == "convnextv2_base_22k_384_ema.pt":
+                weight_dir = os.path.dirname(pre_train_path)
+                if weight_dir:
+                    os.makedirs(weight_dir, exist_ok=True)
+                print(f"Downloading ConvNeXtV2-Base weights to {pre_train_path}")
+                urllib.request.urlretrieve(CONVNEXTV2_BASE_URL, pre_train_path)
+            else:
+                raise FileNotFoundError(f"ConvNeXtV2 weights not found: {pre_train_path}")
+
+        pretrain_weights = torch.load(pre_train_path, map_location="cpu")
+        if "model" in pretrain_weights:
+            pretrain_weights = pretrain_weights["model"]
+        miss_keys, unexpected_keys = self.load_state_dict(pretrain_weights, strict=False)
+        print(f"ConvNeXtV2 weights loaded from {pre_train_path}")
+        print(f"  miss: {miss_keys}, unexpected: {unexpected_keys}")
 
     def forward(self, x, f_maps):
         if self.MODEL_FLAGS and self.MODEL_FLAGS.get('input_resize') is not None:
@@ -144,13 +160,7 @@ class SharedConvNeXtV2Encoder(nn.Module):
 
         backbone_type = FLAGS['Shared_Encoder']['backbone']
         backbone_configs = {
-            'Convnextv2_atto': {'depths': [2, 2, 6, 2], 'dims': [40, 80, 160, 320]},
-            'Convnextv2_femto': {'depths': [2, 2, 6, 2], 'dims': [48, 96, 192, 384]},
-            'Convnextv2_pico': {'depths': [2, 2, 6, 2], 'dims': [64, 128, 256, 512]},
-            'Convnextv2_nano': {'depths': [2, 2, 8, 2], 'dims': [80, 160, 320, 640]},
-            'Convnextv2_tiny': {'depths': [3, 3, 9, 3], 'dims': [96, 192, 384, 768]},
-            'Convnextv2_base': {'depths': [3, 3, 27, 3], 'dims': [128, 256, 512, 1024]},
-            'Convnextv2_large': {'depths': [3, 3, 27, 3], 'dims': [192, 384, 768, 1536]},
+            'Convnextv2_base': {'depths': [3, 3, 27, 3], 'dims': [128, 256, 512, 1024]}
         }
 
         config = backbone_configs.get(backbone_type, backbone_configs['Convnextv2_base'])
@@ -158,7 +168,7 @@ class SharedConvNeXtV2Encoder(nn.Module):
         FLAGS['Shared_Encoder']['depths'] = config['depths']
 
         weights_root = FLAGS.get('weights_root', '')
-        pre_train_path = weights_root + f'Convnextv2/convnextv2_{backbone_type.split("_")[1]}_22k_384_ema.pt'
+        pre_train_path = weights_root + 'Convnextv2/convnextv2_base_22k_384_ema.pt'
 
         self.encoder = ConvNeXtV2(
             MODEL_FLAGS=FLAGS,

@@ -15,10 +15,9 @@ class BasicConv(nn.Module):
         return self.relu(self.bn(self.conv(x)))
 
 
-class OPB(nn.Module):
+class CDB(nn.Module):
     """
-    Orthogonal Projector Block (OPB).
-    Estimates common and unique components from target-reference features.
+    Correlation-guided Decomposition Block (CDB).
     """
     def __init__(self, channels):
         super().__init__()
@@ -54,8 +53,8 @@ class OFDMStage(nn.Module):
         self.rgb_conv = BasicConv(in_channels, out_channels, 1, padding=0)
         self.t_conv = BasicConv(in_channels, out_channels, 1, padding=0)
 
-        self.rgb_opb = OPB(out_channels)
-        self.t_opb = OPB(out_channels)
+        self.rgb_cdb = CDB(out_channels)
+        self.t_cdb = CDB(out_channels)
 
         self.fuse = nn.Sequential(
             BasicConv(out_channels * 3, out_channels, 1, padding=0),
@@ -68,8 +67,8 @@ class OFDMStage(nn.Module):
         r_feat = self.rgb_conv(rgb)
         t_feat = self.t_conv(t)
 
-        r_unique, r_common = self.rgb_opb(target=r_feat, reference=t_feat)
-        t_unique, t_common = self.t_opb(target=t_feat, reference=r_feat)
+        r_unique, r_common = self.rgb_cdb(target=r_feat, reference=t_feat)
+        t_unique, t_common = self.t_cdb(target=t_feat, reference=r_feat)
 
         shared_feat = (r_common + t_common) / 2.0
         combined = torch.cat([r_unique, t_unique, shared_feat], dim=1)
