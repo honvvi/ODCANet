@@ -23,6 +23,11 @@ LEGACY_STATE_KEY_PREFIX_MAP = {
         ("decoder.hcsam_blocks.3.msaa.", "decoder.hcsam_blocks.3.multi_scale_refiner."),
     ),
 }
+HISTORICAL_WEIGHT_ALIAS_MAP = {
+    "HCSAM_Decoder": (
+        (".MH.", ".MFNet."),
+    ),
+}
 
 
 def _looks_like_state_dict(value):
@@ -81,8 +86,20 @@ def _normalize_weight_key(key, component_name):
         if key.startswith(old_prefix):
             key = new_prefix + key[len(old_prefix):]
     if component_name == "OFDM":
-        key = key.replace(".rgb_projector.", ".rgb_opb.")
-        key = key.replace(".t_projector.", ".t_opb.")
+        key = key.replace(".rgb_projector.", ".rgb_cdb.")
+        key = key.replace(".t_projector.", ".t_cdb.")
+        key = key.replace(".rgb_opb.", ".rgb_cdb.")
+        key = key.replace(".t_opb.", ".t_cdb.")
+    return key
+
+
+def _apply_historical_weight_alias(key, target_state, component_name):
+    if key in target_state:
+        return key
+    for old_name, new_name in HISTORICAL_WEIGHT_ALIAS_MAP.get(component_name, ()):
+        alias_key = key.replace(old_name, new_name)
+        if alias_key in target_state:
+            return alias_key
     return key
 
 
@@ -105,6 +122,7 @@ def load_compatible_weights(model, checkpoint, component_name):
             if not torch.is_tensor(value):
                 continue
             new_key = _normalize_weight_key(key, component_name)
+            new_key = _apply_historical_weight_alias(new_key, target_state, component_name)
             if new_key not in target_state:
                 unused_keys.append(key)
                 continue

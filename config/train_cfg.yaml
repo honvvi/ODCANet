@@ -31,4 +31,4 @@ Train:
   lr_threshold: 0.0001
   lr_strategy: 'poly'
 
-  orth_weight:
+  orth_weight: 0.01

@@ -11,7 +11,7 @@ import yaml
 from tqdm import tqdm
 
 from data import DATASET_CONFIGS, build_test_loader
-from evaluation.metrics import SegmentationMetrics
+from evaluation.metrics import build_segmentation_metrics
 from evaluation.roc import SegmentationBenchmark
 from model import build_total_model
 from utils.checkpoint import load_model_part
@@ -207,7 +207,7 @@ def evaluate(args):
             )
     torch.cuda.synchronize(device)
 
-    metrics = SegmentationMetrics(len(label_list), mean_class_count)
+    metrics = build_segmentation_metrics(dataset_config)
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats(device)
     torch.cuda.synchronize(device)
